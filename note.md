@@ -36,7 +36,7 @@ html.H1()\
 html.Div([], style={})\
 html.Div元件可以用作容器，將其他Dash元件组合在一起，style可用於設定版型
 
-html.br()\
+html.Br()\
 break，代表換行
 
 html.Table()\
