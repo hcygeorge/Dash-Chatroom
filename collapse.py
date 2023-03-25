@@ -2,7 +2,7 @@ import dash_bootstrap_components as dbc
 from dash import Dash, html, dcc, dash_table, Input, Output, State
 
 
-app = Dash(__name__)
+app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 collapse = html.Div(
     [
         dbc.Button(
@@ -20,7 +20,7 @@ collapse = html.Div(
     ]
 )
 
-app.layout = collapse
+app.layout = html.Div(collapse)
 
 
 @app.callback(

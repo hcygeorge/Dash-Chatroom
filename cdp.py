@@ -5,19 +5,14 @@ import pandas as pd
 import base64
 from datetime import datetime
 import io
+import dash_bootstrap_components as dbc
+from utils.data import add_commas
+from dash.exceptions import PreventUpdate
 
 #%% Auth
-VALID_USERNAME_PASSWORD_PAIRS = {
-    'data': '1234'
-}
+app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
-app = Dash(__name__, external_stylesheets=external_stylesheets)
-auth = dash_auth.BasicAuth(
-    app,
-    VALID_USERNAME_PASSWORD_PAIRS
-)
 #%% Functions
 def generate_table(dataframe, max_rows=10):
     return html.Table([
@@ -51,23 +46,50 @@ def parse_contents(contents, filename, date):
 
     return df_id['uid'].tolist()
 
+def create_table(df):
+    return [
+        html.Header('僅列印出部分數據'),
+        dash_table.DataTable(
+            id='main-table',
+            data=df.to_dict('records'),
+            columns=[{"name": i, "id": i} for i in df.columns],
+            page_size=10,
+            style_header={'background-color':'#e7f1ff'},
+            style_cell={}
+            )]
+
+def update_indicator(df):
+    return add_commas(round(df['cnt_item'].mean(), 2)), \
+        add_commas(round(df['avgprice'].mean(), 2)), \
+        add_commas(df.shape[0])
+
+def create_rfm_bar(df):
+    new_df = df.groupby(['rfm_new'])[['rfm_new']].count()
+    new_df.columns = ['num']
+    new_df.reset_index(inplace=True)
+    return dcc.Graph(
+        id='rfm_bar',
+        figure=px.bar(new_df, x="num", y="rfm_new", color=None, barmode=None, orientation='h')
+    )
+
+
 #%% Load dataset
 df = pd.read_csv('./data/cdp_sample.csv', sep=',')
 df = df[['uid','gender','birth','age','zip','gender_pred','is_edm_ok','is_company','last_login', 'rfm_new', 'avgprice', 'cnt_item']]
 df['rfm_new'] = df['rfm_new'].fillna('未貼標')
 df['avgprice'] = df['avgprice'].fillna(0)
 
+id_series = None
+
 #%% Style settings
-header_style = {'background-color':'#ffffff', 'color':'black', 'font-size':'20px', 'font-family': 'Sans-serif', 'textAlign': 'center'}
-header2_style = {'display': 'inline', 'background-color':'#e8eefc', 'color':'black', 'font-size':'28px', 'font-family': 'Sans-serif'}
-tab_style = {'height': '8vh', 'background-color':'#e8eefc', 'font-size':'14px', 'font-family': 'Sans-serif'}
-tab_selected_style = {'height': '8vh', 'background-color':'#ffffff', 'font-size':'14px', 'font-family': 'Sans-serif'}
+header_style = {'background-color':'#313a46', 'color':'white', 'font-size':'12px', 'font-family': 'Sans-serif', 'textAlign': 'left'}
+header2_style = {'display': 'inline', 'background-color':'#e7f1ff', 'color':'black', 'font-size':'20px', 'font-family': 'Sans-serif'}
+filter_list_style = {'background-color':'#ffffff', 'color':'black', 'font-family': 'Sans-serif', 'textAlign': 'center'}
 
-
-div2_style = {'display': 'flex', 'flex-direction': 'row', 'justify-content': 'space-between'}
-div4_style = {'display': 'inline-block', 'min-width': '71%', 'max-width': '71%'}
-main_table_style = {'background-color':'#ffffff', 'font-family': 'Sans-serif'}
-panel_style = {'display': 'flex', 'flex-direction': 'row', 'background-color':'#ffffff', 'font-family': 'Sans-serif', 'justify-content': 'space-between'}
+tab_style = {'background-color':'#ffffff', 'font-size':'14px', 'font-family': 'Sans-serif'}
+div2_style = {}
+# div4_style = {}
+panel_style = {'textAlign': 'left', 'fontFamily': 'Sans-serif'}
 
 #%% Sub layouts
 tab01 = [
@@ -82,16 +104,9 @@ tab01 = [
         )
 ]
 
-main_table = [
-    html.Label('會員名單'),
-    dash_table.DataTable(
-        id='main-table',
-        data=df.to_dict('records'),
-        columns=[{"name": i, "id": i} for i in df.columns],
-        page_size=10,
-        style_header={'background-color':'#f3f4f8'},
-        style_cell={}
-        )]
+figures = [
+    ''
+]
 
 
 tab02 = [
@@ -106,132 +121,194 @@ tab02 = [
 ]
 
 panel = [
-    html.Label('會員名單數'),
-    html.H2(
-        id='num-users',
-        children=str(df.shape[0]),
-        style={'textAlign': 'left', 'fontFamily': 'Sans-serif'}),
+    dbc.CardBody([
+        html.Label('會員名單數'),
+        html.Hr(),
+        html.H2(
+            id='num-users',
+            children=add_commas(df.shape[0]),
+            style=panel_style),    
+    ]),
+    dbc.CardBody([
     html.Label('每人平均消費金額'),
+    html.Hr(),
     html.H2(
         id='avgprice',
-        children=str(round(df['avgprice'].mean())),
-        style={'textAlign': 'left', 'fontFamily': 'Sans-serif'}),
+        children=add_commas(round(df['avgprice'].mean(), 2)),
+        style=panel_style),
+    ]),
+    dbc.CardBody([
     html.Label('每人平均購買商品數'),
+    html.Hr(),
     html.H2(
         id='cnt_item',
-        children=str(round(df['cnt_item'].mean())),
+        children=add_commas(round(df['cnt_item'].mean(), 2)),
         style={'textAlign': 'left', 'fontFamily': 'Sans-serif'})
-    ]
-
-save_data = [
-    html.Button("儲存名單", id="btn_csv"),
-    html.A(children='', id='save_data'),
+    ]),
 ]
 
-upload_data = dcc.Upload(
-        id='upload-data',
-        children=html.Div([
-            html.Button('上傳名單'),
-            html.A('', id='is_uploaded'),
-        ]))
+button_group = dbc.ButtonGroup(
+    [
+        dbc.Button("上傳名單", outline=True, color="primary", id='button01', n_clicks=0),
+        dbc.Button("提交名單", outline=True, color="primary", id='button02', n_clicks=0),
+        dbc.Button("重置名單", outline=True, color="primary", id='button03', n_clicks=0),
+    ], size="sm"
+)
+
+accordions = [
+    dbc.AccordionItem(title='基本資料', children='施工中', style=tab_style),
+    dbc.AccordionItem(title='使用行為', children=tab01, style=tab_style),
+    dbc.AccordionItem(title='行銷指標', children=tab02, style=tab_style),
+    dbc.AccordionItem(title='商品偏好', children='施工中', style=tab_style),
+    ]
 
 #%% Layout
 app.layout = html.Div(children=[
-    html.Div(children=[
-        html.Div([
+    dcc.ConfirmDialog(
+        id='confirm-submit',
+        message='確定要提交名單嗎?',
+        ),
+    html.Div([
+        html.Br(),
+        dbc.Row([
+            dbc.Col(html.H5(children='PChome 24h')),
+            dbc.Col(html.Div(id="message", style={'textAlign': 'right'})),
+        ], style={'background-color':'#313a46'}),
+    ], style=header_style),
+    dbc.Row(children=[
+        dbc.Col([
             html.Br(),
-            html.Header(children='PChome24h', style=header_style),
-            html.Br(),
-            dcc.Tabs(id='tabs-example-1', value='tab-1', children=[
-                dcc.Tab(label='基本資料', children='施工中', style=tab_style, selected_style=tab_selected_style),
-                dcc.Tab(label='使用行為', children=tab01, style=tab_style, selected_style=tab_selected_style),
-                dcc.Tab(label='行銷指標', children=tab02, style=tab_style, selected_style=tab_selected_style),
-                dcc.Tab(label='商品偏好', children='施工中', style=tab_style, selected_style=tab_selected_style),
+            dbc.Row([
+                dbc.Col(html.Header(children='標籤清單', style={'textAlign': 'left'})),
+                dbc.Col(dbc.Button('篩選', id='go-filter', size="sm", outline=True, color="primary"), style={'textAlign': 'right'}),
             ]),
+            html.Br(),
+            dbc.Accordion(id='tabs-example-1', children=accordions, start_collapsed=True),
             html.Div(id='filters')
-        ], style={'min-width': '27%', 'max-width': '27%', 'background-color':'#ffffff'}),
-        html.Div(children=[
+        ], style={'max-width': '25%', 'background-color':'#ffffff'}),
+        dbc.Col(children=[
             html.Br(),
-            html.Div([
-                html.Header(children='Dashboard', style=header2_style),
+            dbc.Row([
+                dbc.Col(html.Header('指標', style=header2_style)),
+                dbc.Col(button_group, style={'textAlign': 'right'}),
             ]),
             html.Br(),
-            html.Div(panel, style=panel_style),
+            html.Div(dbc.Row([dbc.Col(dbc.Card(card)) for card in panel], style={'background-color':'#e7f1ff'})),
             html.Br(),
-            html.Div(main_table),
-            html.Br(),
-            html.Div([upload_data, *save_data], style={'textAlign': 'left'}),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            html.Br(),
-            html.Br(),
+            dbc.Card([
+                dbc.CardHeader(dbc.Tabs([
+                    dbc.Tab(label="會員名單", tab_id="tab-1", label_style={'color':'#000000'}),
+                    dbc.Tab(label="RFM客群", tab_id="tab-2", label_style={'color':'#000000'}),
+                    ],
+                    id="card-tabs",
+                    active_tab="tab-1"
+                ), style={'background-color':'#e7f1ff'}),
+                dbc.CardBody(html.P(id="card-content", className="card-text")),
+            ]),
             html.Br(),
             html.Br(),
             html.Br(),
             html.Br(),
-            html.Br()
-            ], style=div4_style),
+            html.Br(),
+            ], style={'background-color':'#e7f1ff'}),
     ], style=div2_style, id='div2'),
     dcc.Store(id='intermediate-value'),
-], style={'background-color':'#e8eefc', 'color':'black'})
+], style={'background-color':'#e7f1ff', 'color':'black'})
 
 
 #%% Callback
-# Update dashboard
 @app.callback(
+    Output("message", "children", allow_duplicate=True),
+    Input('new_rfm_filter', 'value'),
+    prevent_initial_call=True
+    )  
+def rfm(rfm_new):
+    global id_series
+    if 'upload_df' in globals():
+        id_series = upload_df['uid'][upload_df.rfm_new.isin(rfm_new)]
+    else:
+        id_series = df['uid'][df.rfm_new.isin(rfm_new)]
+    return '篩選RFM'
+
+@app.callback(
+    Output("card-content", "children", allow_duplicate=True),
     Output('cnt_item', 'children', allow_duplicate=True),
     Output('avgprice', 'children', allow_duplicate=True),
     Output('num-users', 'children', allow_duplicate=True),
-    Output('main-table', 'data', allow_duplicate=True),
-    Output('intermediate-value', 'data', allow_duplicate=True),
-    Input('new_rfm_filter', 'value'),
-    Input('last-login-slider', 'value'),
+    Input('go-filter', 'n_clicks'),
+    State("card-tabs", "active_tab"),
     prevent_initial_call=True
-    )
-    
-def update_table(rfm_new, last_login):
-    if 'upload_df' in globals():
-        filtered_df = upload_df[upload_df.rfm_new.isin(rfm_new)][upload_df.last_login <= int(last_login)]
+    )  
+def filter_tab_data(n_clicks, active_tab):
+    if 'id_series' in globals():
+        global id_series
+        new_df = df[df['uid'].isin(id_series)]
     else:
-        filtered_df = df[df.rfm_new.isin(rfm_new)][df.last_login <= int(last_login)]
+        new_df = df
 
-    return str(round(filtered_df['cnt_item'].mean())), str(round(filtered_df['avgprice'].mean())), str(filtered_df.shape[0]), filtered_df.to_dict('records'), filtered_df.to_json(date_format='iso', orient='split')
+    if active_tab == 'tab-1':
+        return create_table(new_df), *update_indicator(new_df)
+    elif active_tab == 'tab-2':
+        return create_rfm_bar(new_df), *update_indicator(new_df)
 
-# Define how to save data
 @app.callback(
-    Output("save_data", "children"),
-    Input("btn_csv", "n_clicks"),
-    State('intermediate-value', 'data'),
-    prevent_initial_call=True,
-)
-def func(n_clicks, jsonified_cleaned_data):
-    try:
-        jsonified_cleaned_data
-    except:
-        return '名單沒有經過篩選，無法儲存'
-    saved_df = pd.read_json(jsonified_cleaned_data, orient='split')
-    today = datetime.now().strftime("%Y%m%d_%H%M%S")
-    message = f'已儲存名單: {today}.csv'
+        Output("message", "children", allow_duplicate=True),
+        Input("button01", "n_clicks"),
+        prevent_initial_call=True)
+def upload_data(n_clicks):
+    message = f'已上傳名單'
     return message
 
-@app.callback(Output('is_uploaded', 'children'),
-              Output('main-table', 'data'),
-              Input('upload-data', 'contents'),
-              State('upload-data', 'filename'),
-              State('upload-data', 'last_modified'),
-              prevent_initial_call=True
-              )
-def update_output(list_of_contents, list_of_names, list_of_dates):
-    if list_of_contents is not None:
-        df_id = parse_contents(list_of_contents, list_of_names, list_of_dates)
-        global upload_df
-        upload_df = df[df['uid'].isin(df_id)].copy()
-        return f'已上傳名單: {list_of_names}', upload_df.to_dict('records')
+@app.callback(
+        Output('confirm-submit', 'displayed'),
+        Input("button02", "n_clicks"),
+        prevent_initial_call=True
+        )
+def confirm_submit(n_clicks):
+    return True
+
+@app.callback(
+        Output("message", "children", allow_duplicate=True),
+        Input("confirm-submit", "submit_n_clicks"),
+        State('intermediate-value', 'data'),
+        prevent_initial_call=True
+        )
+def save_data(n_clicks, jsonified_cleaned_data):
+    if jsonified_cleaned_data is None:
+        message = f'資料未經篩選，無法提交名單'
+        return message
+    else:
+        saved_df = pd.read_json(jsonified_cleaned_data, orient='split')
+        today = datetime.now().strftime("%Y%m%d_%H%M")
+        message = f'已提交名單: {today}'
+        return message
+
+@app.callback(
+        Output("message", "children", allow_duplicate=True),
+        Input("button03", "n_clicks"),
+        prevent_initial_call=True
+        )
+def reset_data(n_clicks):
+    message = f'已重置名單'
+    return message
+
+
+@app.callback(
+    Output("card-content", "children", allow_duplicate=True),
+    [Input("card-tabs", "active_tab")],
+    prevent_initial_call=True
+)
+def tab_content(active_tab):
+    if 'id_series' in globals():
+        global id_series
+        new_df = df[df['uid'].isin(id_series)]
+    else:
+        new_df = df
+
+    if active_tab == 'tab-1':
+        return html.Div(create_table(new_df))
+    elif active_tab == 'tab-2':
+        return create_rfm_bar(new_df)
 
 #%% Run
 if __name__ == '__main__':
