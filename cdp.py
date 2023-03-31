@@ -1,5 +1,4 @@
 from dash import Dash, html, dcc, dash_table, Input, Output, State
-import dash_auth
 import plotly.express as px
 import pandas as pd
 import base64
@@ -9,7 +8,7 @@ import dash_bootstrap_components as dbc
 from utils.data import add_commas
 from dash.exceptions import PreventUpdate
 
-#%% Auth
+#%%
 app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 
@@ -80,7 +79,6 @@ df['rfm_new'] = df['rfm_new'].fillna('未貼標')
 df['avgprice'] = df['avgprice'].fillna(0)
 
 id_series = None
-
 #%% Style settings
 header_style = {'background-color':'#313a46', 'color':'white', 'font-size':'12px', 'font-family': 'Sans-serif', 'textAlign': 'left'}
 header2_style = {'display': 'inline', 'background-color':'#e7f1ff', 'color':'black', 'font-size':'20px', 'font-family': 'Sans-serif'}
