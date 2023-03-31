@@ -78,7 +78,6 @@ df = df[['uid','gender','birth','age','zip','gender_pred','is_edm_ok','is_compan
 df['rfm_new'] = df['rfm_new'].fillna('未貼標')
 df['avgprice'] = df['avgprice'].fillna(0)
 
-id_series = None
 #%% Style settings
 header_style = {'background-color':'#313a46', 'color':'white', 'font-size':'12px', 'font-family': 'Sans-serif', 'textAlign': 'left'}
 header2_style = {'display': 'inline', 'background-color':'#e7f1ff', 'color':'black', 'font-size':'20px', 'font-family': 'Sans-serif'}
@@ -147,9 +146,9 @@ panel = [
 
 button_group = dbc.ButtonGroup(
     [
-        dbc.Button("上傳名單", outline=True, color="primary", id='button01', n_clicks=0),
-        dbc.Button("提交名單", outline=True, color="primary", id='button02', n_clicks=0),
-        dbc.Button("重置名單", outline=True, color="primary", id='button03', n_clicks=0),
+        dbc.Button("上傳名單", outline=True, color="primary", id='upload_list_button', n_clicks=0),
+        dbc.Button("提交名單", outline=True, color="primary", id='submit_list_button', n_clicks=0),
+        dbc.Button("重置名單", outline=True, color="primary", id='reset_list_button', n_clicks=0),
     ], size="sm"
 )
 
@@ -163,14 +162,14 @@ accordions = [
 #%% Layout
 app.layout = html.Div(children=[
     dcc.ConfirmDialog(
-        id='confirm-submit',
+        id='confirm_submit_button',
         message='確定要提交名單嗎?',
         ),
     html.Div([
         html.Br(),
         dbc.Row([
             dbc.Col(html.H5(children='PChome 24h')),
-            dbc.Col(html.Div(id="message", style={'textAlign': 'right'})),
+            dbc.Col(html.Div(id="system_message", style={'textAlign': 'right'})),
         ], style={'background-color':'#313a46'}),
     ], style=header_style),
     dbc.Row(children=[
@@ -201,7 +200,7 @@ app.layout = html.Div(children=[
                     id="card-tabs",
                     active_tab="tab-1"
                 ), style={'background-color':'#e7f1ff'}),
-                dbc.CardBody(html.P(id="card-content", className="card-text")),
+                dbc.CardBody(html.P(children=html.Div(create_table(df)), id="card-body", className="card-text")),
             ]),
             html.Br(),
             html.Br(),
@@ -210,13 +209,13 @@ app.layout = html.Div(children=[
             html.Br(),
             ], style={'background-color':'#e7f1ff'}),
     ], style=div2_style, id='div2'),
-    dcc.Store(id='intermediate-value'),
 ], style={'background-color':'#e7f1ff', 'color':'black'})
 
 
 #%% Callback
+# RFM篩選器
 @app.callback(
-    Output("message", "children", allow_duplicate=True),
+    Output("system_message", "children", allow_duplicate=True),
     Input('new_rfm_filter', 'value'),
     prevent_initial_call=True
     )  
@@ -228,8 +227,29 @@ def rfm(rfm_new):
         id_series = df['uid'][df.rfm_new.isin(rfm_new)]
     return '篩選RFM'
 
+# 篩選按鈕，更新card-body
 @app.callback(
-    Output("card-content", "children", allow_duplicate=True),
+    Output('num-users', 'children', allow_duplicate=True),
+    Input('go-filter', 'n_clicks'),
+    State("card-tabs", "active_tab"),
+    prevent_initial_call=True
+    )  
+def filter_dashboard(n_clicks, active_tab):
+    global new_df
+    if 'id_series' in globals():
+        global id_series
+        new_df = df[df['uid'].isin(id_series)]
+    else:
+        new_df = df
+
+    if active_tab == 'tab-1':
+        return create_table(new_df)
+    elif active_tab == 'tab-2':
+        return create_rfm_bar(new_df)
+
+# 篩選按鈕，更新indicator
+@app.callback(
+    Output("card-body", "children", allow_duplicate=True),
     Output('cnt_item', 'children', allow_duplicate=True),
     Output('avgprice', 'children', allow_duplicate=True),
     Output('num-users', 'children', allow_duplicate=True),
@@ -237,7 +257,7 @@ def rfm(rfm_new):
     State("card-tabs", "active_tab"),
     prevent_initial_call=True
     )  
-def filter_tab_data(n_clicks, active_tab):
+def filter_dashboard(n_clicks, active_tab):
     if 'id_series' in globals():
         global id_series
         new_df = df[df['uid'].isin(id_series)]
@@ -249,50 +269,50 @@ def filter_tab_data(n_clicks, active_tab):
     elif active_tab == 'tab-2':
         return create_rfm_bar(new_df), *update_indicator(new_df)
 
+
+# 上傳名單按鈕
 @app.callback(
-        Output("message", "children", allow_duplicate=True),
-        Input("button01", "n_clicks"),
+        Output("system_message", "children", allow_duplicate=True),
+        Input("upload_list_button", "n_clicks"),
         prevent_initial_call=True)
 def upload_data(n_clicks):
     message = f'已上傳名單'
     return message
 
+# 提交名單按鈕
 @app.callback(
-        Output('confirm-submit', 'displayed'),
-        Input("button02", "n_clicks"),
+        Output('confirm_submit_button', 'displayed'),
+        Input("submit_list_button", "n_clicks"),
         prevent_initial_call=True
         )
 def confirm_submit(n_clicks):
     return True
 
+# 確認提交按鈕
 @app.callback(
-        Output("message", "children", allow_duplicate=True),
-        Input("confirm-submit", "submit_n_clicks"),
-        State('intermediate-value', 'data'),
+        Output("system_message", "children", allow_duplicate=True),
+        Input("confirm_submit_button", "submit_n_clicks"),
         prevent_initial_call=True
         )
-def save_data(n_clicks, jsonified_cleaned_data):
-    if jsonified_cleaned_data is None:
-        message = f'資料未經篩選，無法提交名單'
-        return message
-    else:
-        saved_df = pd.read_json(jsonified_cleaned_data, orient='split')
-        today = datetime.now().strftime("%Y%m%d_%H%M")
-        message = f'已提交名單: {today}'
-        return message
+def submit_data(n_clicks):
+    # saved_df = pd.read_json(df, orient='split')
+    today = datetime.now().strftime("%Y%m%d_%H%M")
+    message = f'已提交名單，單號: {today}'
+    return message
 
+# 重置名單按鈕
 @app.callback(
-        Output("message", "children", allow_duplicate=True),
-        Input("button03", "n_clicks"),
+        Output("system_message", "children", allow_duplicate=True),
+        Input("reset_list_button", "n_clicks"),
         prevent_initial_call=True
         )
 def reset_data(n_clicks):
     message = f'已重置名單'
     return message
 
-
+# 切換頁簽
 @app.callback(
-    Output("card-content", "children", allow_duplicate=True),
+    Output("card-body", "children", allow_duplicate=True),
     [Input("card-tabs", "active_tab")],
     prevent_initial_call=True
 )
