@@ -11,20 +11,7 @@ from dash.exceptions import PreventUpdate
 #%%
 app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-
 #%% Functions
-def generate_table(dataframe, max_rows=10):
-    return html.Table([
-        html.Thead(
-            html.Tr([html.Th(col) for col in dataframe.columns])
-        ),
-        html.Tbody([
-            html.Tr([
-                html.Td(dataframe.iloc[i][col]) for col in dataframe.columns
-            ]) for i in range(min(len(dataframe), max_rows))
-        ])
-    ])
-
 def parse_contents(contents, filename, date):
     content_type, content_string = contents.split(',')
 
@@ -82,10 +69,8 @@ df['avgprice'] = df['avgprice'].fillna(0)
 header_style = {'background-color':'#313a46', 'color':'white', 'font-size':'12px', 'font-family': 'Sans-serif', 'textAlign': 'left'}
 header2_style = {'display': 'inline', 'background-color':'#e7f1ff', 'color':'black', 'font-size':'20px', 'font-family': 'Sans-serif'}
 filter_list_style = {'background-color':'#ffffff', 'color':'black', 'font-family': 'Sans-serif', 'textAlign': 'center'}
-
 tab_style = {'background-color':'#ffffff', 'font-size':'14px', 'font-family': 'Sans-serif'}
 div2_style = {}
-# div4_style = {}
 panel_style = {'textAlign': 'left', 'fontFamily': 'Sans-serif'}
 
 #%% Sub layouts
@@ -234,7 +219,7 @@ def rfm(rfm_new):
     State("card-tabs", "active_tab"),
     prevent_initial_call=True
     )  
-def filter_dashboard(n_clicks, active_tab):
+def filter_board(n_clicks, active_tab):
     global new_df
     if 'id_series' in globals():
         global id_series
@@ -257,7 +242,7 @@ def filter_dashboard(n_clicks, active_tab):
     State("card-tabs", "active_tab"),
     prevent_initial_call=True
     )  
-def filter_dashboard(n_clicks, active_tab):
+def filter_indicator(n_clicks, active_tab):
     if 'id_series' in globals():
         global id_series
         new_df = df[df['uid'].isin(id_series)]
